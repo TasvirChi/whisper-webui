@@ -70,6 +70,9 @@ class ApplicationConfig:
                  word_timestamps: bool = False, prepend_punctuations: str = "\"\'“¿([{-",
                  append_punctuations: str = "\"\'.。,，!！?？:：”)]}、", 
                  highlight_words: bool = False,
+                 # Alignment
+                 alignment: bool = False, alignment_model: str = None, alignment_process_timeout: int = 60,
+                 interpolate_method: str = "nearest", char_alignments: bool = False,
                  # Diarization
                  auth_token: str = None, diarization: bool = False, diarization_speakers: int = 2,
                  diarization_min_speakers: int = 1, diarization_max_speakers: int = 5,
@@ -124,6 +127,13 @@ class ApplicationConfig:
         self.prepend_punctuations = prepend_punctuations
         self.append_punctuations = append_punctuations
         self.highlight_words = highlight_words
+        
+        # Alignment settings
+        self.alignment = alignment
+        self.interpolate_method = interpolate_method
+        self.char_alignments = char_alignments
+        self.alignment_model = alignment_model
+        self.alignment_process_timeout = alignment_process_timeout
         
         # Diarization settings
         self.auth_token = auth_token

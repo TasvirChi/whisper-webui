@@ -50,7 +50,7 @@ class Diarization:
             return
         from pyannote.audio import Pipeline
 
-        self.pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1", use_auth_token=self.auth_token)
+        self.pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=self.auth_token)
         self.initialized = True
 
         # Load GPU mode if available

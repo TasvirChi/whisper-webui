@@ -8,10 +8,12 @@ from io import StringIO
 import os
 import pathlib
 import tempfile
+import warnings
 import zipfile
 import numpy as np
 
 import torch
+from src.alignment.alignmentContainer import AlignmentContainer
 
 from src.config import VAD_INITIAL_PROMPT_MODE_VALUES, ApplicationConfig, VadInitialPromptMode
 from src.diarization.diarization import Diarization
@@ -28,6 +30,7 @@ from src.vadParallel import ParallelContext, ParallelTranscription
 
 # External programs
 import ffmpeg
+from whisperx.utils import (LANGUAGES, TO_LANGUAGE_CODE, get_writer)
 
 # UI
 import gradio as gr
@@ -76,6 +79,11 @@ class WhisperTranscriber:
         self.output_dir = output_dir
 
         # Support for diarization
+        self.alignment: AlignmentContainer = None
+        # Dictionary with parameters to pass to diarization.run - if None, diarization is not enabled
+        self.alignment_kwargs = None
+        
+        # Support for diarization
         self.diarization: DiarizationContainer = None
         # Dictionary with parameters to pass to diarization.run - if None, diarization is not enabled
         self.diarization_kwargs = None
@@ -92,6 +100,19 @@ class WhisperTranscriber:
             self.vad_cpu_cores = min(os.cpu_count(), MAX_AUTO_CPU_CORES)
             print("[Auto parallel] Using GPU devices " + str(self.parallel_device_list) + " and " + str(self.vad_cpu_cores) + " CPU cores for VAD/transcription.")
 
+    def set_alignment(self, enable_daemon_process: bool = True, **kwargs):
+        if self.alignment is None:
+            self.alignment = AlignmentContainer(enable_daemon_process=enable_daemon_process, 
+                                                    auto_cleanup_timeout_seconds=self.app_config.alignment_process_timeout, 
+                                                    cache=self.model_cache)
+        # Set parameters
+        self.alignment_kwargs = kwargs
+
+    def unset_alignment(self):
+        if self.alignment is not None:
+            self.alignment.cleanup()
+        self.alignment_kwargs = None
+        
     def set_diarization(self, auth_token: str, enable_daemon_process: bool = True, **kwargs):
         if self.diarization is None:
             self.diarization = DiarizationContainer(auth_token=auth_token, enable_daemon_process=enable_daemon_process, 
@@ -120,9 +141,24 @@ class WhisperTranscriber:
                                          vad, vadMergeWindow, vadMaxMergeSize, 
                                          word_timestamps: bool = False, highlight_words: bool = False, 
                                          diarization: bool = False, diarization_speakers: int = 2,
+                                         alignment: bool = False, char_alignments: bool = False,
                                          progress=gr.Progress()):
         
         vadOptions = VadOptions(vad, vadMergeWindow, vadMaxMergeSize, self.app_config.vad_padding, self.app_config.vad_prompt_window, self.app_config.vad_initial_prompt_mode)
+
+        if alignment:
+            if languageName is not None:
+                languageCode = languageName.lower()
+                if languageCode not in LANGUAGES:
+                    if languageCode in TO_LANGUAGE_CODE:
+                        languageCode = TO_LANGUAGE_CODE[languageName]
+                    else:
+                        raise ValueError(f"Unsupported language: {languageName}")
+            # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir, interpolate_method="nearest", return_char_alignments=char_alignments, print_progress=False, combined_progress=False)
+        else:
+            self.unset_alignment()
 
         if diarization:
             self.set_diarization(auth_token=self.app_config.auth_token, num_speakers=diarization_speakers)
@@ -162,6 +198,7 @@ class WhisperTranscriber:
                                         compression_ratio_threshold: float, logprob_threshold: float, no_speech_threshold: float, 
                                         diarization: bool = False, diarization_speakers: int = 2, 
                                         diarization_min_speakers = 1, diarization_max_speakers = 5,
+                                        alignment: bool = False, alignment_model: str = None, interpolate_method: str = "nearest", char_alignments: bool = False,
                                         progress=gr.Progress()):
 
         # Handle temperature_increment_on_fallback
@@ -172,6 +209,27 @@ class WhisperTranscriber:
 
         vadOptions = VadOptions(vad, vadMergeWindow, vadMaxMergeSize, vadPadding, vadPromptWindow, vadInitialPromptMode)
 
+        if alignment:
+            if languageName is not None:
+                languageCode = languageName.lower()
+                if languageCode not in LANGUAGES:
+                    if languageCode in TO_LANGUAGE_CODE:
+                        languageCode = TO_LANGUAGE_CODE[languageName]
+                    else:
+                        raise ValueError(f"Unsupported language: {languageName}")
+
+            if alignment_model.endswith(".en") and languageCode != "en":
+                if languageName is not None:
+                    warnings.warn(
+                        f"{alignment_model} is an English-only model but received '{languageName}'; using English instead."
+                    )
+                languageCode = "en"
+            # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, return_char_alignments=char_alignments, print_progress=False, combined_progress=False)
+        else:
+            self.unset_alignment()
+            
         # Set diarization
         if diarization:
             self.set_diarization(auth_token=self.app_config.auth_token, num_speakers=diarization_speakers, 
@@ -409,10 +467,24 @@ class WhisperTranscriber:
                 # Default VAD
                 result = whisperCallable.invoke(audio_path, 0, None, None, progress_listener=progressListener)
         
+        # Alignment
+        result = self._handle_alignment(audio_path, result)
         # Diarization
         result = self._handle_diarization(audio_path, result)
         return result
 
+    def _handle_alignment(self, audio_path: str, input: dict):
+        if self.alignment and self.alignment_kwargs:
+            print("Aligning ", audio_path)
+            alignment_result = list(self.alignment.run(audio_path, input, **self.alignment_kwargs))
+
+            # Print result
+            print("Align result: ")
+            for align in alignment_result:
+                print(f"  start={align.start:.1f}s stop={align.end:.1f}s score={align.score}")
+
+        return alignment_result
+    
     def _handle_diarization(self, audio_path: str, input: dict):
         if self.diarization and self.diarization_kwargs:
             print("Diarizing ", audio_path)
@@ -623,6 +695,11 @@ def create_ui(app_config: ApplicationConfig):
         gr.Checkbox(label="Word Timestamps - Highlight Words", value=app_config.highlight_words),
     ]
 
+    common_align_inputs = lambda : [
+        gr.Checkbox(label="Align", value=app_config.alignment),
+        gr.Checkbox(label="Char Level Alignments", value=app_config.char_alignments),
+    ]
+
     has_diarization_libs = Diarization.has_libraries()
 
     if not has_diarization_libs:
@@ -641,6 +718,7 @@ def create_ui(app_config: ApplicationConfig):
         *common_inputs(),
         *common_vad_inputs(),
         *common_word_timestamps_inputs(),
+        *common_align_inputs(),
         *common_diarization_inputs(),
     ], outputs=[
         gr.File(label="Download"),
@@ -677,6 +755,10 @@ def create_ui(app_config: ApplicationConfig):
         gr.Number(label="Logprob threshold", value=app_config.logprob_threshold),
         gr.Number(label="No speech threshold", value=app_config.no_speech_threshold),
 
+        *common_align_inputs(),
+        gr.Dropdown(label="Method to assign timestamps to non-aligned words, or merge them into neighbouring.", choices=["nearest", "linear", "ignore"], value=app_config.interpolate_method),
+        gr.Text(label="Name of phoneme-level ASR model to do alignment", value=app_config.alignment_model),
+
         *common_diarization_inputs(),
         gr.Number(label="Diarization - Min Speakers", precision=0, value=app_config.diarization_min_speakers, interactive=has_diarization_libs),
         gr.Number(label="Diarization - Max Speakers", precision=0, value=app_config.diarization_max_speakers, interactive=has_diarization_libs),
@@ -694,6 +776,10 @@ def create_ui(app_config: ApplicationConfig):
         gr.File(label="Upload Audio File", file_count="single"),
         gr.File(label="Upload JSON/SRT File", file_count="single"),
         gr.Checkbox(label="Word Timestamps - Highlight Words", value=app_config.highlight_words),
+
+        *common_align_inputs(),
+        gr.Dropdown(label="Method to assign timestamps to non-aligned words, or merge them into neighbouring.", choices=["nearest", "linear", "ignore"], value=app_config.interpolate_method),
+        gr.Text(label="Name of phoneme-level ASR model to do alignment", value=app_config.alignment_model),
 
         *common_diarization_inputs(),
         gr.Number(label="Diarization - Min Speakers", precision=0, value=app_config.diarization_min_speakers, interactive=has_diarization_libs),
