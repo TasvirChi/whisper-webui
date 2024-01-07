@@ -474,6 +474,7 @@ class WhisperTranscriber:
         return result
 
     def _handle_alignment(self, audio_path: str, input: dict):
+        alignment_result: list = input
         if self.alignment and self.alignment_kwargs:
             print("Aligning ", audio_path)
             alignment_result = list(self.alignment.run(audio_path, input, **self.alignment_kwargs))

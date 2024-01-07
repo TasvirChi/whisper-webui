@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, List
+from google.colab import userdata
 import torch
 
 import ffmpeg
@@ -28,9 +29,11 @@ class DiarizationEntry:
 class Diarization:
     def __init__(self, auth_token=None):
         if auth_token is None:
-            auth_token = os.environ.get("HK_ACCESS_TOKEN")
+            auth_token = os.environ.get("HF_TOKEN")
             if auth_token is None:
-                raise ValueError("No HuggingFace API Token provided - please use the --auth_token argument or set the HK_ACCESS_TOKEN environment variable")
+                auth_token = userdata.get("HF_TOKEN")
+                if auth_token is None:
+                    raise ValueError("No HuggingFace API Token provided - please use the --auth_token argument or set the HF_TOKEN environment variable")
         
         self.auth_token = auth_token
         self.initialized = False
