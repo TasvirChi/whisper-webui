@@ -130,18 +130,20 @@ class WhisperTranscriber:
     def transcribe_webui_simple(self, modelName, languageName, urlData, multipleFiles, microphoneData, task, 
                                 vad, vadMergeWindow, vadMaxMergeSize, 
                                 word_timestamps: bool = False, highlight_words: bool = False,
+                                alignment: bool = False, char_alignments: bool = False,
                                 diarization: bool = False, diarization_speakers: int = 2):
         return self.transcribe_webui_simple_progress(modelName, languageName, urlData, multipleFiles, microphoneData, task, 
                                                      vad, vadMergeWindow, vadMaxMergeSize, 
                                                      word_timestamps, highlight_words, 
+                                                     alignment, char_alignments,
                                                      diarization, diarization_speakers)
     
     # Entry function for the simple tab progress
     def transcribe_webui_simple_progress(self, modelName, languageName, urlData, multipleFiles, microphoneData, task, 
                                          vad, vadMergeWindow, vadMaxMergeSize, 
                                          word_timestamps: bool = False, highlight_words: bool = False, 
-                                         diarization: bool = False, diarization_speakers: int = 2,
                                          alignment: bool = False, char_alignments: bool = False,
+                                         diarization: bool = False, diarization_speakers: int = 2,
                                          progress=gr.Progress()):
         
         vadOptions = VadOptions(vad, vadMergeWindow, vadMaxMergeSize, self.app_config.vad_padding, self.app_config.vad_prompt_window, self.app_config.vad_initial_prompt_mode)
@@ -176,6 +178,7 @@ class WhisperTranscriber:
                               initial_prompt: str, temperature: float, best_of: int, beam_size: int, patience: float, length_penalty: float, suppress_tokens: str, 
                               condition_on_previous_text: bool, fp16: bool, temperature_increment_on_fallback: float, 
                               compression_ratio_threshold: float, logprob_threshold: float, no_speech_threshold: float,
+                              alignment: bool = False, char_alignments: bool = False, alignment_model: str = None, interpolate_method: str = "nearest",
                               diarization: bool = False, diarization_speakers: int = 2, 
                               diarization_min_speakers = 1, diarization_max_speakers = 5):
         
@@ -185,6 +188,7 @@ class WhisperTranscriber:
                                 initial_prompt, temperature, best_of, beam_size, patience, length_penalty, suppress_tokens,
                                 condition_on_previous_text, fp16, temperature_increment_on_fallback,
                                 compression_ratio_threshold, logprob_threshold, no_speech_threshold,
+                                alignment, char_alignments, alignment_model, interpolate_method,
                                 diarization, diarization_speakers, 
                                 diarization_min_speakers, diarization_max_speakers)
 
@@ -196,9 +200,9 @@ class WhisperTranscriber:
                                         initial_prompt: str, temperature: float, best_of: int, beam_size: int, patience: float, length_penalty: float, suppress_tokens: str, 
                                         condition_on_previous_text: bool, fp16: bool, temperature_increment_on_fallback: float, 
                                         compression_ratio_threshold: float, logprob_threshold: float, no_speech_threshold: float, 
+                                        alignment: bool = False, char_alignments: bool = False, alignment_model: str = None, interpolate_method: str = "nearest",
                                         diarization: bool = False, diarization_speakers: int = 2, 
                                         diarization_min_speakers = 1, diarization_max_speakers = 5,
-                                        alignment: bool = False, alignment_model: str = None, interpolate_method: str = "nearest", char_alignments: bool = False,
                                         progress=gr.Progress()):
 
         # Handle temperature_increment_on_fallback
@@ -247,10 +251,32 @@ class WhisperTranscriber:
     # Perform diarization given a specific input audio file and whisper file
     def perform_extra(self, languageName, urlData, singleFile, whisper_file: str, 
                       highlight_words: bool = False,
+                      alignment: bool = False, char_alignments: bool = False, alignment_model: str = None, interpolate_method: str = "nearest",
                       diarization: bool = False, diarization_speakers: int = 2, diarization_min_speakers = 1, diarization_max_speakers = 5, progress=gr.Progress()):
     
         if whisper_file is None:
             raise ValueError("whisper_file is required")
+
+        if alignment:
+            if languageName is not None:
+                languageCode = languageName.lower()
+                if languageCode not in LANGUAGES:
+                    if languageCode in TO_LANGUAGE_CODE:
+                        languageCode = TO_LANGUAGE_CODE[languageName]
+                    else:
+                        raise ValueError(f"Unsupported language: {languageName}")
+
+            if alignment_model.endswith(".en") and languageCode != "en":
+                if languageName is not None:
+                    warnings.warn(
+                        f"{alignment_model} is an English-only model but received '{languageName}'; using English instead."
+                    )
+                languageCode = "en"
+            # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, char_alignments=char_alignments, print_progress=False, combined_progress=False)
+        else:
+            self.unset_alignment()
 
          # Set diarization
         if diarization:
@@ -757,8 +783,8 @@ def create_ui(app_config: ApplicationConfig):
         gr.Number(label="No speech threshold", value=app_config.no_speech_threshold),
 
         *common_align_inputs(),
-        gr.Dropdown(label="Method to assign timestamps to non-aligned words, or merge them into neighbouring.", choices=["nearest", "linear", "ignore"], value=app_config.interpolate_method),
         gr.Text(label="Name of phoneme-level ASR model to do alignment", value=app_config.alignment_model),
+        gr.Dropdown(label="Method to assign timestamps to non-aligned words, or merge them into neighbouring.", choices=["nearest", "linear", "ignore"], value=app_config.interpolate_method),
 
         *common_diarization_inputs(),
         gr.Number(label="Diarization - Min Speakers", precision=0, value=app_config.diarization_min_speakers, interactive=has_diarization_libs),
