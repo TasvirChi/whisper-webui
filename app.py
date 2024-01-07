@@ -156,7 +156,7 @@ class WhisperTranscriber:
                         raise ValueError(f"Unsupported language: {languageName}")
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir, interpolate_method="nearest", return_char_alignments=char_alignments, print_progress=False, combined_progress=False)
+            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir, interpolate_method="nearest", char_alignments=char_alignments, print_progress=False, combined_progress=False)
         else:
             self.unset_alignment()
 
@@ -226,7 +226,7 @@ class WhisperTranscriber:
                 languageCode = "en"
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, return_char_alignments=char_alignments, print_progress=False, combined_progress=False)
+            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, char_alignments=char_alignments, print_progress=False, combined_progress=False)
         else:
             self.unset_alignment()
             

@@ -153,11 +153,11 @@
     // Whether to perform alignment
     "alignment": false,
     // Name of phoneme-level ASR model to do alignment
-    "alignment_model" = null,
+    "alignment_model": null,
     // For word .srt, method to assign timestamps to non-aligned words, or merge them into neighbouring.["nearest", "linear", "ignore"]
-    "interpolate_method" = "nearest",
+    "interpolate_method": "nearest",
     // Return character-level alignments in the output json file
-    "return_char_alignments" = false,
+    "char_alignments": false,
 
     // Diarization settings
     "auth_token": null,

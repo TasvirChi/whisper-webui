@@ -46,7 +46,7 @@ def main():
                         help="language spoken in the audio, specify None to perform language detection")
     parser.add_argument("--align_model", default=None, help="Name of phoneme-level ASR model to do alignment")
     parser.add_argument("--interpolate_method", default="nearest", choices=["nearest", "linear", "ignore"], help="For word .srt, method to assign timestamps to non-aligned words, or merge them into neighbouring.")
-    parser.add_argument("--return_char_alignments", action='store_true', help="Return character-level alignments in the output json file")
+    parser.add_argument("--char_alignments", action='store_true', help="Return character-level alignments in the output json file")
 
 
     args = parser.parse_args()
