@@ -27,7 +27,7 @@ class AlignmentContainer:
         pool = self.alignment_context.get_pool()
 
         try:
-            result = pool.apply(self.execute, (audio_file,), kwargs)
+            result = pool.apply(self.execute, (audio_file, result,), kwargs)
             return result
         finally:
             self.alignment_context.return_pool(pool)
@@ -39,7 +39,7 @@ class AlignmentContainer:
                 print("Loading alignment model from cache")
                 self.model = self.cache.get("alignment", lambda : Alignment())
             else:
-                print("Loading diarization model")
+                print("Loading alignment model")
                 self.model = Alignment()
         return self.model
 
@@ -47,7 +47,7 @@ class AlignmentContainer:
         model = self.get_model()
 
         # We must use list() here to force the iterator to run, as generators are not picklable
-        result = list(model.run(audio_file, **kwargs))
+        result = list(model.run(audio_file, result, **kwargs))
         return result
     
     def cleanup(self):
@@ -56,13 +56,11 @@ class AlignmentContainer:
 
     def __getstate__(self):
         return {
-            "auth_token": self.auth_token,
             "enable_daemon_process": self.enable_daemon_process,
             "auto_cleanup_timeout_seconds": self.auto_cleanup_timeout_seconds
         }
     
     def __setstate__(self, state):
-        self.auth_token = state["auth_token"]
         self.enable_daemon_process = state["enable_daemon_process"]
         self.auto_cleanup_timeout_seconds = state["auto_cleanup_timeout_seconds"]
         self.alignment_context = None

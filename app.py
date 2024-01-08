@@ -21,7 +21,7 @@ from src.diarization.diarizationContainer import DiarizationContainer
 from src.diarization.transcriptLoader import load_transcript
 from src.hooks.progressListener import ProgressListener
 from src.hooks.subTaskProgressListener import SubTaskProgressListener
-from src.languages import get_language_names
+from src.languages import get_language_names, get_language_from_name
 from src.modelCache import ModelCache
 from src.prompts.jsonPromptStrategy import JsonPromptStrategy
 from src.prompts.prependPromptStrategy import PrependPromptStrategy
@@ -150,15 +150,12 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = languageName.lower()
-                if languageCode not in LANGUAGES:
-                    if languageCode in TO_LANGUAGE_CODE:
-                        languageCode = TO_LANGUAGE_CODE[languageName]
-                    else:
-                        raise ValueError(f"Unsupported language: {languageName}")
+                languageCode = get_language_from_name(languageName)
+                if languageName is None:
+                    raise ValueError(f"Unsupported language: {languageName}")
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir, interpolate_method="nearest", char_alignments=char_alignments, print_progress=False, combined_progress=False)
+            self.set_alignment(enable_daemon_process=True, char_alignments=char_alignments, interpolate_method="nearest", print_progress=self.app_config.alignment_print_progress, combined_progress=self.app_config.alignment_combined_progress, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir)
         else:
             self.unset_alignment()
 
@@ -215,12 +212,9 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = languageName.lower()
-                if languageCode not in LANGUAGES:
-                    if languageCode in TO_LANGUAGE_CODE:
-                        languageCode = TO_LANGUAGE_CODE[languageName]
-                    else:
-                        raise ValueError(f"Unsupported language: {languageName}")
+                languageCode = get_language_from_name(languageName)
+                if languageName is None:
+                    raise ValueError(f"Unsupported language: {languageName}")
 
             if alignment_model.endswith(".en") and languageCode != "en":
                 if languageName is not None:
@@ -230,7 +224,7 @@ class WhisperTranscriber:
                 languageCode = "en"
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, char_alignments=char_alignments, print_progress=False, combined_progress=False)
+            self.set_alignment(enable_daemon_process=True, char_alignments=char_alignments, interpolate_method=interpolate_method, print_progress=self.app_config.alignment_print_progress, combined_progress=self.app_config.alignment_combined_progress, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir)
         else:
             self.unset_alignment()
             
@@ -259,12 +253,9 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = languageName.lower()
-                if languageCode not in LANGUAGES:
-                    if languageCode in TO_LANGUAGE_CODE:
-                        languageCode = TO_LANGUAGE_CODE[languageName]
-                    else:
-                        raise ValueError(f"Unsupported language: {languageName}")
+                languageCode = get_language_from_name(languageName)
+                if languageName is None:
+                    raise ValueError(f"Unsupported language: {languageName}")
 
             if alignment_model.endswith(".en") and languageCode != "en":
                 if languageName is not None:
@@ -274,7 +265,7 @@ class WhisperTranscriber:
                 languageCode = "en"
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.set_alignment(enable_daemon_process=True, language_code=languageCode, device=device, model_name=alignment_model, model_dir=self.app_config.model_dir, interpolate_method=interpolate_method, char_alignments=char_alignments, print_progress=False, combined_progress=False)
+            self.set_alignment(enable_daemon_process=True, char_alignments=char_alignments, interpolate_method=interpolate_method, print_progress=self.app_config.alignment_print_progress, combined_progress=self.app_config.alignment_combined_progress, language_code=languageCode, device=device, model_name=None, model_dir=self.app_config.model_dir)
         else:
             self.unset_alignment()
 

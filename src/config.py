@@ -73,6 +73,7 @@ class ApplicationConfig:
                  # Alignment
                  alignment: bool = False, alignment_model: str = None, alignment_process_timeout: int = 60,
                  interpolate_method: str = "nearest", char_alignments: bool = False,
+                 alignment_print_progress: bool = False, alignment_combined_progress: bool = False,
                  # Diarization
                  auth_token: str = None, diarization: bool = False, diarization_speakers: int = 2,
                  diarization_min_speakers: int = 1, diarization_max_speakers: int = 5,
@@ -134,6 +135,8 @@ class ApplicationConfig:
         self.char_alignments = char_alignments
         self.alignment_model = alignment_model
         self.alignment_process_timeout = alignment_process_timeout
+        self.alignment_print_progress = alignment_print_progress
+        self.alignment_combined_progress = alignment_combined_progress
         
         # Diarization settings
         self.auth_token = auth_token

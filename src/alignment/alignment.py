@@ -15,17 +15,28 @@ class Alignment:
         self.pipeline = None
 
     def run(self, input_audio, result, **kwargs):
-        align_model, align_metadata = whisperx.load_align_model(**kwargs)
+
+        language_code = kwargs.get('language_code', None)
+        device = kwargs.get('device', "cuda" if torch.cuda.is_available() else "cpu")
+        model_name = kwargs.get('model_name', None)
+        model_dir = kwargs.get('model_dir', None)
+        align_model, align_metadata = whisperx.load_align_model(language_code=language_code, device=device, model_name=model_name, model_dir=model_dir)
         
         # >> Align
         if align_model is not None and len(result["segments"]) > 0:
             if result.get("language", "en") != align_metadata["language"]:
                 # load new language
                 print(f"New language found ({result['language']})! Previous was ({align_metadata['language']}), loading new alignment model for new language...")
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                align_model, align_metadata = whisperx.load_align_model(result["language"], device, model_dir=self.app_config.model_dir)
+                align_model, align_metadata = whisperx.load_align_model(language_code=result["language"], device=device, model_name=model_name, model_dir=model_dir)
             print(">>Performing alignment...")
-            result = whisperx.align(transcript=result["segments"], model=align_model, align_model_metadata=align_metadata, audio=input_audio, **kwargs)
+            interpolate_method = kwargs.get('interpolate_method', "nearest")
+            return_char_alignments = kwargs.get('return_char_alignments', False)
+            print_progress = kwargs.get('print_progress', False)
+            combined_progress = kwargs.get('combined_progress', False)
+            result = whisperx.align(transcript=result["segments"], model=align_model, align_model_metadata=align_metadata, 
+                                    audio=input_audio, device=device, interpolate_method=interpolate_method, 
+                                    return_char_alignments=return_char_alignments, print_progress=print_progress, 
+                                    combined_progress=combined_progress)
 
         # Unload align model
         del align_model
@@ -57,7 +68,7 @@ def main():
     whisper_result = load_transcript(args.whisper_file)
 
     alignment = Alignment()
-    alignment_result = list(alignment.run(args.audio_file, num_speakers=args.num_speakers, min_speakers=args.min_speakers, max_speakers=args.max_speakers))
+    alignment_result = list(alignment.run(args.audio_file, whisper_result, align_model=args.align_model, interpolate_method=args.interpolate_method, char_alignments=args.char_alignments))
 
     # Print result
     print("Alignment result:")
