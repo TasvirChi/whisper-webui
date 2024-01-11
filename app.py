@@ -30,13 +30,13 @@ from src.vadParallel import ParallelContext, ParallelTranscription
 
 # External programs
 import ffmpeg
-from whisperx.utils import (LANGUAGES, TO_LANGUAGE_CODE, get_writer)
+from whisperx.utils import (LANGUAGES, TO_LANGUAGE_CODE, WriteTXT, WriteTSV)
 
 # UI
 import gradio as gr
 
 from src.download import ExceededMaximumDuration, download_url
-from src.utils import optional_int, slugify, str2bool, write_srt, write_vtt
+from src.utils import get_writer, optional_int, slugify, str2bool, write_srt, write_vtt
 from src.vad import AbstractTranscription, NonSpeechStrategy, PeriodicTranscriptionConfig, TranscriptionConfig, VadPeriodicTranscription, VadSileroTranscription
 from src.whisper.abstractWhisperContainer import AbstractWhisperContainer
 from src.whisper.whisperFactory import create_whisper_container
@@ -150,7 +150,7 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = get_language_from_name(languageName)
+                languageCode = get_language_from_name(languageName).code
                 if languageName is None:
                     raise ValueError(f"Unsupported language: {languageName}")
             # languageCode = languageCode if languageCode is not None else "en" # default to loading english if not specified
@@ -212,7 +212,7 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = get_language_from_name(languageName)
+                languageCode = get_language_from_name(languageName).code
                 if languageName is None:
                     raise ValueError(f"Unsupported language: {languageName}")
 
@@ -253,7 +253,7 @@ class WhisperTranscriber:
 
         if alignment:
             if languageName is not None:
-                languageCode = get_language_from_name(languageName)
+                languageCode = get_language_from_name(languageName).code
                 if languageName is None:
                     raise ValueError(f"Unsupported language: {languageName}")
 
@@ -295,7 +295,7 @@ class WhisperTranscriber:
                                        override_transcribe_file=custom_transcribe_file, override_max_sources=1)
 
     def transcribe_webui(self, modelName, languageName, urlData, multipleFiles, microphoneData, task, 
-                         vadOptions: VadOptions, progress: gr.Progress = None, highlight_words: bool = False, 
+                         vadOptions: VadOptions, progress: gr.Progress = None, highlight_words: bool = False, align_words: bool = False,
                          override_transcribe_file: Callable[[AudioSource], dict] = None, override_max_sources = None,
                          **decodeOptions: dict):
         try:
@@ -361,7 +361,7 @@ class WhisperTranscriber:
                     # Update progress
                     current_progress += source_audio_duration
 
-                    source_download, source_text, source_vtt = self.write_result(result, filePrefix, outputDirectory, highlight_words)
+                    source_download, source_text, source_vtt = self.write_result(result, filePrefix, outputDirectory, align_words, highlight_words)
 
                     if len(sources) > 1:
                         # Add new line separators
@@ -491,17 +491,19 @@ class WhisperTranscriber:
         return result
 
     def _handle_alignment(self, audio_path: str, input: dict):
-        alignment_result: list = input
-        if self.alignment and self.alignment_kwargs:
-            print("Aligning ", audio_path)
-            alignment_result = list(self.alignment.run(audio_path, input, **self.alignment_kwargs))
 
-            # Print result
-            print("Align result: ")
-            for align in alignment_result:
-                print(f"  start={align.start:.1f}s stop={align.end:.1f}s score={align.score}")
+      alignment_result = {}
+      alignment_result["text"] = input["text"]
+      alignment_result["language"] = input.get("language", None)
+      alignment_result["segments"] = input["segments"]
 
-        return alignment_result
+      if self.alignment:
+        print("Aligning ", audio_path)
+        alignment_result.update(
+            self.alignment.run(audio_path, input, **self.alignment_kwargs)
+        )
+
+      return alignment_result
     
     def _handle_diarization(self, audio_path: str, input: dict):
         if self.diarization and self.diarization_kwargs:
@@ -585,27 +587,37 @@ class WhisperTranscriber:
 
         return config
 
-    def write_result(self, result: dict, source_name: str, output_dir: str, highlight_words: bool = False, extras: str = ""):
+    def write_result(self, result: dict, source_name: str, output_dir: str, align: bool = False, highlight_words: bool = False, maxLineWidth: int = None, maxLineCount: int = None, extras: str = ""):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        text = result["text"]
+        writer = get_writer("all", output_dir)
+
         language = result["language"] if "language" in result else None
-        languageMaxLineWidth = self.__get_max_line_width(language)
+        maxLineWidth = maxLineWidth if maxLineWidth is not None else self.__get_max_line_width(language)
 
-        print("Max line width " + str(languageMaxLineWidth))
-        vtt = self.__get_subs(result["segments"], "vtt", languageMaxLineWidth, highlight_words=highlight_words)
-        srt = self.__get_subs(result["segments"], "srt", languageMaxLineWidth, highlight_words=highlight_words)
-        json_result = json.dumps(result, indent=4, ensure_ascii=False)
+        writer_args = {
+            "max_line_width": maxLineWidth,
+            "max_line_count": maxLineCount, 
+            "highlight_words": highlight_words,
+            "without_space": align
+        }
 
-        output_name = source_name + extras 
-        output_files = []
-        output_files.append(self.__create_file(srt, output_dir, output_name + "-subs.srt"));
-        output_files.append(self.__create_file(vtt, output_dir, output_name + "-subs.vtt"));
-        output_files.append(self.__create_file(text, output_dir, output_name + "-transcript.txt"));
-        output_files.append(self.__create_file(json_result, output_dir, output_name + "-result.json"));
+        output_files = writer(result, source_name, writer_args)
 
-        return output_files, text, vtt
+        # print("Max line width " + str(languageMaxLineWidth))
+        # vtt = self.__get_subs(result["segments"], "vtt", languageMaxLineWidth, highlight_words=highlight_words)
+        # srt = self.__get_subs(result["segments"], "srt", languageMaxLineWidth, highlight_words=highlight_words)
+        # json_result = json.dumps(result, indent=4, ensure_ascii=False)
+
+        # output_name = source_name + extras
+        # output_files = []
+        # output_files.append(self.__create_file(srt, output_dir, output_name + "-subs.srt"));
+        # output_files.append(self.__create_file(vtt, output_dir, output_name + "-subs.vtt"));
+        # output_files.append(self.__create_file(text, output_dir, output_name + "-transcript.txt"));
+        # output_files.append(self.__create_file(json_result, output_dir, output_name + "-result.json"));
+
+        return output_files, result["text"], result["segments"]
 
     def clear_cache(self):
         self.model_cache.clear()

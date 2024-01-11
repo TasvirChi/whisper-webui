@@ -47,7 +47,7 @@ class AlignmentContainer:
         model = self.get_model()
 
         # We must use list() here to force the iterator to run, as generators are not picklable
-        result = list(model.run(audio_file, result, **kwargs))
+        result = model.run(audio_file, result, **kwargs)
         return result
     
     def cleanup(self):
