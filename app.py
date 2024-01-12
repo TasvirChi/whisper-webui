@@ -36,7 +36,7 @@ from whisperx.utils import (LANGUAGES, TO_LANGUAGE_CODE, WriteTXT, WriteTSV)
 import gradio as gr
 
 from src.download import ExceededMaximumDuration, download_url
-from src.utils import get_writer, optional_int, slugify, str2bool, write_srt, write_vtt
+from src.utils import get_writer, optional_int, slugify, str2bool
 from src.vad import AbstractTranscription, NonSpeechStrategy, PeriodicTranscriptionConfig, TranscriptionConfig, VadPeriodicTranscription, VadSileroTranscription
 from src.whisper.abstractWhisperContainer import AbstractWhisperContainer
 from src.whisper.whisperFactory import create_whisper_container
