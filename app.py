@@ -377,7 +377,7 @@ class WhisperTranscriber:
                     # Add to result
                     download.extend(source_download)
                     text += source_text
-                    vtt += source_vtt
+                    # vtt += source_vtt
 
                     if (len(sources) > 1):
                         # Zip files support at least 260 characters, but we'll play it safe and use 200
