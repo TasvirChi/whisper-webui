@@ -280,7 +280,7 @@ class WriteJSON(ResultWriter):
 
 def get_writer(
     output_format: str, output_dir: str
-) -> Callable[[dict, TextIO, dict], list[str]]:
+) -> Callable[[dict, TextIO, dict], list]:
     writers = {
         "txt": WriteTXT,
         "vtt": WriteVTT,
@@ -298,7 +298,7 @@ def get_writer(
         def write_all(result: dict, file: TextIO, options: dict):
             file_names = []
             for writer in all_writers:
-                output_path = writer(result, file, options)
+                output_path = writer(result, file, options)[0]
                 file_names.append(output_path)
             return file_names
 
