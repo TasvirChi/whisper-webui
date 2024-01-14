@@ -158,7 +158,7 @@ class SubtitlesWriter(ResultWriter):
             if len(subtitle) > 0:
                 yield subtitle, times
 
-        if "words" in result["segments"][0]:
+        if "words" in result["segments"][0] and len(result["segments"][0]["words"]) > 0:
             for subtitle, _ in iterate_subtitles():
                 sstart, ssend, speaker = _[0]
                 subtitle_start = self.format_timestamp(sstart)
