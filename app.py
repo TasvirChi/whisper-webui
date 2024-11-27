@@ -705,11 +705,32 @@ def create_ui(app_config: ApplicationConfig):
 
     whisper_models = app_config.get_model_names()
 
+    def get_files_from_directory(directory_path, extensions=['.mp3', '.wav', '.mp4']):
+        files_list = []
+        for root, dirs, files in os.walk(directory_path):
+            for file in files:
+                if any(file.lower().endswith(ext) for ext in extensions):
+                    full_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(full_path, directory_path)
+                    files_list.append(relative_path)
+        return sorted(files_list)
+    
+    # مسیر دایرکتوری مورد نظر را تعیین کنید
+    directory_path = "/content/drive/MyDrive/Whisper_sources"
+    
+    # دریافت لیست فایل‌ها
+    files_list = get_files_from_directory(directory_path)
+    
     common_inputs = lambda : [
         gr.Dropdown(choices=whisper_models, value=app_config.default_model_name, label="Model"),
         gr.Dropdown(choices=sorted(get_language_names()), label="Language", value=app_config.language),
         gr.Text(label="URL (YouTube, etc.)"),
-        gr.File(label="Upload Files", file_count="multiple"),
+        gr.Dropdown(
+            choices=files_list,
+            value=files_list,
+            label="Select File",
+            multiselect=True
+        ),
         gr.Audio(source="microphone", type="filepath", label="Microphone Input"),
         gr.Dropdown(choices=["transcribe", "translate"], label="Task", value=app_config.task),
     ]
